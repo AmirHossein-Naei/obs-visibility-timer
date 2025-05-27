@@ -1,6 +1,5 @@
-local repeat_hold, repeat_source
-
 obs           = obslua
+
 source_name   = ""
 mode          = ""
 total_ms      = 0
@@ -19,22 +18,18 @@ end
 
 function enable_source()
 	obs.obs_sceneitem_set_visible(get_item(), true)
-
 	obs.timer_remove(enable_source)
 end
 
 function disable_source()
 	obs.obs_sceneitem_set_visible(get_item(), false)
-
 	obs.timer_remove(disable_source)
 end
 
 function repeat_hold()
 	local item = get_item()
 	local visible = obs.obs_sceneitem_visible(item)
-
 	obs.obs_sceneitem_set_visible(item, not visible)
-
 	obs.timer_remove(repeat_hold)
 	obs.timer_add(repeat_source, total_ms + obs.obs_sceneitem_get_transition_duration(item, not visible))
 end
@@ -42,19 +37,14 @@ end
 function repeat_source()
 	local item = get_item()
 	local visible = obs.obs_sceneitem_visible(item)
-
 	obs.obs_sceneitem_set_visible(item, not visible)
-
 	obs.timer_remove(repeat_source)
 	obs.timer_add(repeat_hold, hold + obs.obs_sceneitem_get_transition_duration(item, not visible))
 end
 
 function start_timer()
 	local item = get_item()
-
-	if item == nil then
-		return
-	end
+	if item == nil then return end
 
 	if (mode == "mode_hide") then
 		obs.obs_sceneitem_set_visible(item, true)
@@ -76,7 +66,6 @@ function activate(activating)
 	obs.timer_remove(repeat_source)
 	obs.timer_remove(disable_source)
 	obs.timer_remove(enable_source)
-	obs.timer_remove(toggle_source)
 
 	if activating then
 		if delay ~= 0 then
@@ -114,14 +103,7 @@ function settings_modified(props, prop, settings)
 	local start = obs.obs_properties_get(props, "start_visible")
 	local hold = obs.obs_properties_get(props, "hold_ms")
 
-	local enabled
-
-	if (mode_setting == "mode_repeat") then
-		enabled = true
-	else
-		enabled = false
-	end
-
+	local enabled = (mode_setting == "mode_repeat")
 	obs.obs_property_set_visible(start, enabled)
 	obs.obs_property_set_visible(hold, enabled)
 
@@ -134,7 +116,7 @@ function script_properties()
 	local mode = obs.obs_properties_add_list(props, "mode", "Mode", obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_STRING)
 	obs.obs_property_list_add_string(mode, "Hide source after specified time", "mode_hide")
 	obs.obs_property_list_add_string(mode, "Show source after specified time", "mode_show")
-	obs.obs_property_list_add_string(mode, "Repeat", "mode_repeat")
+	obs.obs_property_list_add_string(mode, "Repeat show/hide", "mode_repeat")
 
 	local p = obs.obs_properties_add_list(props, "source", "Source", obs.OBS_COMBO_TYPE_EDITABLE, obs.OBS_COMBO_FORMAT_STRING)
 	local sources = obs.obs_enum_sources()
@@ -149,24 +131,22 @@ function script_properties()
 	obs.obs_properties_add_int(props, "delay_ms", "Delay after activated (ms)", 0, 3600000, 1)
 	obs.obs_properties_add_int(props, "duration_ms", "Duration (ms)", 1, 3600000, 1)
 	obs.obs_properties_add_int(props, "hold_ms", "Hold time (ms)", 1, 3600000, 1)
-
 	obs.obs_properties_add_bool(props, "start_visible", "Start visible")
 
 	obs.obs_property_set_modified_callback(mode, settings_modified)
-
 	settings_modified(props, nil, settings_)
 
 	return props
 end
 
 function on_event(event)
-	if event == obs.OBS_FRONTEND_EVENT_SCENE_CHANGED then
+	if event == obs.OBS_FRONTEND_EVENT_SCENE_CHANGED and mode == "mode_repeat" then
 		activate(true)
 	end
 end
 
 function script_description()
-	return "Sets a source to show/hide on a timer."
+	return "Shows/hides a source on a timer. Works properly only when triggered manually by the user."
 end
 
 function script_update(settings)
@@ -177,21 +157,22 @@ function script_update(settings)
 	mode = obs.obs_data_get_string(settings, "mode")
 	start_visible = obs.obs_data_get_bool(settings, "start_visible")
 
-	activate(true)
+	if mode == "mode_repeat" then
+		activate(true)
+	end
 end
 
 function script_defaults(settings)
 	obs.obs_data_set_default_int(settings, "duration_ms", 1000)
 	obs.obs_data_set_default_int(settings, "delay_ms", 0)
 	obs.obs_data_set_default_int(settings, "hold_ms", 1000)
-	obs.obs_data_set_default_bool(setting, "start_visible", true)
+	obs.obs_data_set_default_bool(settings, "start_visible", true)
 end
 
 function script_load(settings)
 	local sh = obs.obs_get_signal_handler()
 	obs.signal_handler_connect(sh, "source_activate", source_activated)
-	obs.signal_handler_connect(sh, "source_deactive", source_deactivated)
-
+	obs.signal_handler_connect(sh, "source_deactivate", source_deactivated)
 	obs.obs_frontend_add_event_callback(on_event)
 
 	settings_ = settings
